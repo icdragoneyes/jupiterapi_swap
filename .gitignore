@@ -139,3 +139,5 @@ pnpm-lock.yaml
 *.code-workspace
 
 data.json
+
+wallets.json
