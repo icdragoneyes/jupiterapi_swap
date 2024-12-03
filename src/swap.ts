@@ -27,6 +27,11 @@ export const getBuyTransaction = async (wallet: Keypair, token: PublicKey, amoun
       })
     ).json();
 
+    if (!swapTransaction) {
+      console.log("Failed to get buy transaction")
+      return null
+    }
+
     const swapTransactionBuf = Buffer.from(swapTransaction, "base64");
     const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
@@ -63,6 +68,11 @@ export const getSellTransaction = async (wallet: Keypair, token: PublicKey, amou
         }),
       })
     ).json();
+
+    if (!swapTransaction) {
+      console.log("Failed to get sell transaction")
+      return null
+    }
 
     const swapTransactionBuf = Buffer.from(swapTransaction, "base64");
     const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
