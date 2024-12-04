@@ -5,7 +5,7 @@ import {
 } from '@solana/web3.js';
 import { SLIPPAGE } from './constants';
 
-export const getBuyTransaction = async (wallet: Keypair, token: PublicKey, amount: number) => {
+export const getBuyTransaction = async (wallet: Keypair, token: PublicKey, amount: number): Promise<VersionedTransaction | null> => {
   try {
     const quote = await (await fetch(
       `https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=${token.toBase58()}&amount=${amount}&slippageBps=${SLIPPAGE}`
@@ -22,14 +22,15 @@ export const getBuyTransaction = async (wallet: Keypair, token: PublicKey, amoun
           userPublicKey: wallet.publicKey.toString(),
           wrapAndUnwrapSol: true,
           dynamicComputeUnitLimit: true,
-          prioritizationFeeLamports: 100000
+          prioritizationFeeLamports: 100_000
         }),
       })
     ).json();
 
     if (!swapTransaction) {
-      console.log("Failed to get buy transaction")
-      return null
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      return await getBuyTransaction(wallet, token, amount);
     }
 
     const swapTransactionBuf = Buffer.from(swapTransaction, "base64");
@@ -45,7 +46,7 @@ export const getBuyTransaction = async (wallet: Keypair, token: PublicKey, amoun
 };
 
 
-export const getSellTransaction = async (wallet: Keypair, token: PublicKey, amount: string) => {
+export const getSellTransaction = async (wallet: Keypair, token: PublicKey, amount: number): Promise<VersionedTransaction | null> => {
   try {
     const quote = await (
       await fetch(
@@ -64,14 +65,15 @@ export const getSellTransaction = async (wallet: Keypair, token: PublicKey, amou
           userPublicKey: wallet.publicKey.toString(),
           wrapAndUnwrapSol: true,
           dynamicComputeUnitLimit: true,
-          prioritizationFeeLamports: 52000
+          prioritizationFeeLamports: 52_000
         }),
       })
     ).json();
 
     if (!swapTransaction) {
-      console.log("Failed to get sell transaction")
-      return null
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      return await getSellTransaction(wallet, token, amount);
     }
 
     const swapTransactionBuf = Buffer.from(swapTransaction, "base64");
