@@ -49,7 +49,7 @@ function randomArray<T>(array: T[]): T[] {
 const generateNewWallet = async (wallet: Keypair, old?: Keypair): Promise<Keypair | undefined> => {
   const balance = await connection.getBalance(wallet.publicKey)
   
-  if (balance <= 60_000_000 * 2) {
+  if (balance <= 10_000_000) {
     console.log(`Wallet ${wallet.publicKey.toBase58()} balance ${balance} is not enough`)
 
     return
@@ -102,7 +102,7 @@ const generateNewWallet = async (wallet: Keypair, old?: Keypair): Promise<Keypai
   return generated
 }
 
-const run = async (generate: boolean = true) => {
+const run = async () => {
   const privateKeys = getAllWallet()
 
   if (privateKeys.length == 0) {
@@ -115,9 +115,9 @@ const run = async (generate: boolean = true) => {
   const actions = [] as ([() => Promise<void>, () => Promise<void>])[]
 
   for (const wallet of wallets) {
-    const balance = await connection.getBalance(wallet.publicKey)
+    const balance = (await connection.getBalance(wallet.publicKey)) - 1_000_000
 
-    if (balance <= 60_000_000 * 2) {
+    if (balance <= 60_000_000) {
       console.log(`Wallet ${wallet.publicKey.toBase58()} balance ${balance} is not enough`)
 
       continue
@@ -125,11 +125,9 @@ const run = async (generate: boolean = true) => {
 
     actions.push([
       async () => {
-        const value = amount()
-  
         try {
-          console.log(`Start buying for wallet ${wallet.publicKey} with amount ${value}`)
-          await buy(wallet, new PublicKey(TOKEN_MINT), value)
+          console.log(`Start buying for wallet ${wallet.publicKey} with amount ${balance}`)
+          await buy(wallet, new PublicKey(TOKEN_MINT), balance)
         } catch (error) {
           console.log(`Error buying token ${wallet.publicKey}: ${error}`)
         }
@@ -137,12 +135,14 @@ const run = async (generate: boolean = true) => {
       async () => {
         try {
           console.log(`Start selling for wallet ${wallet.publicKey}`)
-          await sell(new PublicKey(TOKEN_MINT), wallet)
+          await sell(new PublicKey(TOKEN_MINT), wallet, 0.005)
         } catch (error) {
           console.log(`Error selling token ${wallet.publicKey}: ${error}`)
         }
       }
     ])
+
+    await sell(new PublicKey(TOKEN_MINT), wallet)
   }
 
   if (wallets.length == 0) {
@@ -153,52 +153,39 @@ const run = async (generate: boolean = true) => {
 
   const swaps = [] as (() => Promise<void>)[]
 
-  for (let i = 0; i < 10; i++) {
-    for (const [buying, selling] of actions) {
+  for (const [buying, selling] of actions) {
+    try {
       await buying()
-      
-      const swap = swaps.shift()
+    } catch (error) {
+      console.log(`Error buying token: ${error}`)
+    }
 
-      if (swap) {
+    const swap = swaps.shift()
+
+    if (swap) {
+      try {
         await swap()
+      } catch (error) {
+        console.log(`Error swapping token: ${error}`)
       }
-
-      swaps.push(selling)
     }
 
-    for (const swap of [...swaps]) {
-      swaps.shift()
+    swaps.push(selling)
+  }
 
+  for (const swap of swaps) {
+    try {
       await swap()
+    } catch (error) {
+      console.log(`Error swapping token: ${error}`)
     }
   }
 
-  for (const wallet of wallets) {
-    const balance = await connection.getBalance(wallet.publicKey)
+  const holders = await getTokenHolderCount()
 
-    if (balance <= 60_000_000 * 2) {
-      continue
-    }
+  console.log(`Total holders: ${holders}`)
 
-    const value = amount()
-
-    try {
-      console.log(`Start buying for wallet ${wallet.publicKey} with amount ${value}`)
-      await buy(wallet, new PublicKey(TOKEN_MINT), value)
-    } catch (error) {
-      console.log(`Error buying token ${wallet.publicKey}: ${error}`)
-    }
-
-    try {
-      console.log(`Start selling for wallet ${wallet.publicKey} with hold 0.5%`)
-      await sell(new PublicKey(TOKEN_MINT), wallet, 0.005)
-      console.log('Sell success')
-    } catch (error) {
-      console.log(`Error selling token ${wallet.publicKey}: ${error}`)
-    }
-  }
-
-  if (generate) {
+  if (holders < 1000) {
     for (const wallet of wallets) {
       await generateNewWallet(wallet)
     }
@@ -293,13 +280,54 @@ const sell = async (token: PublicKey, wallet: Keypair, hold: number = 0) => {
   }
 }
 
-const main = async () => {
-  for (let i = 0; i < 20; i++) {
-    await run()
+const getTokenHolderCount = async () => {
+  const connection = new Connection('https://wandering-light-sponge.solana-mainnet.quiknode.pro/8fad23df9dae2e832049ac721f6c5ee5166d3e81')
+  const publicKey = new PublicKey(TOKEN_MINT)
+  
+  const holders = await connection.getParsedProgramAccounts(
+    new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+    {
+      filters: [
+        {
+          dataSize: 165
+        },
+        {
+          memcmp: {
+            offset: 0,
+            bytes: publicKey.toBase58()
+          }
+        }
+      ]
+    }
+  )
+
+  const uniqueHolders = new Set()
+
+  for (const { account } of holders) {
+    const data = account.data as {
+      parsed: {
+        info: {
+          tokenAmount: {
+            amount: string
+          },
+          owner: PublicKey
+        }
+      }
+    }
+
+    const tokenAmount = Number(data.parsed.info.tokenAmount.amount)
+
+    if (tokenAmount > 0) {
+      uniqueHolders.add(data.parsed.info.owner)
+    }
   }
 
+  return uniqueHolders.size
+}
+
+const main = async () => {
   while (true) {
-    await run(false)
+    await run()
   }
 }
 
