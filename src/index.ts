@@ -49,8 +49,10 @@ function randomArray<T>(array: T[]): T[] {
 const generateNewWallet = async (wallet: Keypair, old?: Keypair): Promise<Keypair | undefined> => {
   const balance = await connection.getBalance(wallet.publicKey)
   
-  if (balance <= 10_000_000) {
+  if (balance <= 5_000_000) {
     console.log(`Wallet ${wallet.publicKey.toBase58()} balance ${balance} is not enough`)
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
 
     return
   }
@@ -111,17 +113,20 @@ const run = async () => {
     return
   }
 
-  const wallets = privateKeys.map((privateKey: string) => Keypair.fromSecretKey(base58.decode(privateKey)))
+  const pairs = privateKeys.map((privateKey: string) => Keypair.fromSecretKey(base58.decode(privateKey)))
+  const wallets = [] as Keypair[]
   const actions = [] as ([() => Promise<void>, () => Promise<void>])[]
 
-  for (const wallet of wallets) {
-    const balance = (await connection.getBalance(wallet.publicKey)) - 1_000_000
+  for (const wallet of pairs) {
+    const balance = (await connection.getBalance(wallet.publicKey)) - 2_000_000
 
-    if (balance <= 60_000_000) {
-      console.log(`Wallet ${wallet.publicKey.toBase58()} balance ${balance} is not enough`)
+    if (balance <= 5_000_000) {
+      console.log(`Wallet ${wallet.publicKey.toBase58()} balance ${balance + 2_000_000} is not enough`)
 
       continue
     }
+
+    wallets.push(wallet)
 
     actions.push([
       async () => {
@@ -145,7 +150,7 @@ const run = async () => {
     await sell(new PublicKey(TOKEN_MINT), wallet)
   }
 
-  if (wallets.length == 0) {
+  if (pairs.length == 0) {
     console.log("No wallets have enough balance")
 
     return
