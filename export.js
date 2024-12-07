@@ -6,7 +6,7 @@ const { readFileSync, unlinkSync, writeFileSync } = require('fs');
 
 const connection = new Connection('https://api.mainnet-beta.solana.com', {
   wsEndpoint: 'wss://api.mainnet-beta.solana.com',
-  commitment: 'confirmed',
+  commitment: 'processed',
 });
 
 const tokenProgramId = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -18,24 +18,29 @@ const token = new PublicKey('33a14qXWo1MB7uXtTh5ifyvox7FdGRPQbsws41gfpump');
  * @param {PublicKey} wallet
  */
 const getTokenBalance = async (wallet) => {
-  const [contract] = PublicKey.findProgramAddressSync(
-    [wallet.toBuffer(), tokenProgramId.toBuffer(), token.toBuffer()],
-    associatedTokenProgramId,
-  );
+  try {
+    const [contract] = PublicKey.findProgramAddressSync(
+      [wallet.toBuffer(), tokenProgramId.toBuffer(), token.toBuffer()],
+      associatedTokenProgramId,
+    );
 
-  const info = await connection.getTokenAccountBalance(contract);
+    const info = await connection.getTokenAccountBalance(contract);
 
-  if (!info) {
+    if (!info) {
+      return 0;
+    }
+
+    return Number(info.value.uiAmount || 0);
+  } catch (e) {
     return 0;
   }
-
-  return Number(info.value.uiAmount || 0);
 };
 
 const main = async () => {
   const keys = JSON.parse(readFileSync('wallets.json').toString());
   const wallets = keys.map((key) => Keypair.fromSecretKey(base58.decode(key)));
   const data = [];
+  let i = 0;
 
   for (const wallet of wallets) {
     const publicKey = wallet.publicKey.toBase58();
@@ -45,7 +50,9 @@ const main = async () => {
 
     data.push({ publicKey, privateKey, balance, amount });
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.log(`${++i} Exporting ${publicKey} with balance ${balance} and amount ${amount}`);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
   try {
