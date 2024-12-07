@@ -20,7 +20,7 @@ import { getAssociatedTokenAddress } from '@solana/spl-token'
 import { readFileSync, writeFileSync } from 'fs'
 
 export const connection = new Connection(RPC_ENDPOINT, {
-  wsEndpoint: RPC_WEBSOCKET_ENDPOINT, commitment: "confirmed"
+  wsEndpoint: RPC_WEBSOCKET_ENDPOINT, commitment: 'processed'
 })
 
 const getAllWallet = () => {
@@ -33,11 +33,6 @@ const getAllWallet = () => {
 
     return []
   }
-}
-
-const amount = () => {
-  // random from 60_000_000 to 120_000_000
-  return Math.floor(Math.random() * 60_000_000) + 60_000_000
 }
 
 function randomArray<T>(array: T[]): T[] {
@@ -118,10 +113,13 @@ const run = async () => {
   const actions = [] as ([() => Promise<void>, () => Promise<void>])[]
 
   for (const wallet of pairs) {
-    const balance = (await connection.getBalance(wallet.publicKey)) - 2_000_000
+    const amount = Math.floor(Math.random() * 30_000_000) + 30_000_000
+    const balance = (await connection.getBalance(wallet.publicKey)) - 4_000_000
 
-    if (balance <= 5_000_000) {
-      console.log(`Wallet ${wallet.publicKey.toBase58()} balance ${balance + 2_000_000} is not enough`)
+    if (balance < amount) {
+      console.log(`Wallet ${wallet.publicKey.toBase58()} balance ${balance + 4_000_000} is not enough`)
+
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
       continue
     }
@@ -131,8 +129,8 @@ const run = async () => {
     actions.push([
       async () => {
         try {
-          console.log(`Start buying for wallet ${wallet.publicKey} with amount ${balance}`)
-          await buy(wallet, new PublicKey(TOKEN_MINT), balance)
+          console.log(`Start buying for wallet ${wallet.publicKey} with amount ${amount}`)
+          await buy(wallet, new PublicKey(TOKEN_MINT), amount)
         } catch (error) {
           console.log(`Error buying token ${wallet.publicKey}: ${error}`)
         }
@@ -140,7 +138,7 @@ const run = async () => {
       async () => {
         try {
           console.log(`Start selling for wallet ${wallet.publicKey}`)
-          await sell(new PublicKey(TOKEN_MINT), wallet, 0.005)
+          await sell(new PublicKey(TOKEN_MINT), wallet)
         } catch (error) {
           console.log(`Error selling token ${wallet.publicKey}: ${error}`)
         }
@@ -150,7 +148,7 @@ const run = async () => {
     await sell(new PublicKey(TOKEN_MINT), wallet)
   }
 
-  if (pairs.length == 0) {
+  if (wallets.length == 0) {
     console.log("No wallets have enough balance")
 
     return
@@ -172,6 +170,8 @@ const run = async () => {
         await swap()
       } catch (error) {
         console.log(`Error swapping token: ${error}`)
+
+        swaps.push(swap)
       }
     }
 
@@ -190,11 +190,11 @@ const run = async () => {
 
   console.log(`Total holders: ${holders}`)
 
-  if (holders < 1000) {
-    for (const wallet of wallets) {
-      await generateNewWallet(wallet)
-    }
-  }
+  // if (holders < 1000) {
+  //   for (const wallet of wallets) {
+  //     await generateNewWallet(wallet)
+  //   }
+  // }
 }
 
 const buy = async (wallet: Keypair, token: PublicKey, amount: number) => {
@@ -333,6 +333,8 @@ const getTokenHolderCount = async () => {
 const main = async () => {
   while (true) {
     await run()
+
+    await new Promise((resolve) => setTimeout(resolve, 60_000))
   }
 }
 
